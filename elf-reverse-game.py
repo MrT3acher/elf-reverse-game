@@ -42,7 +42,7 @@ class Game:
     asked = 0
     binaries = []
     questions = []
-    training_binary = None
+    binary = None
     overwrite_folder = None
 
     def __init__(self):
@@ -70,7 +70,7 @@ class Game:
         shutil.copy(binpath, args.folder)
         filename = binpath.split('/')[-1]
         newbinpath = '/'.join(args.folder.split('/') + [filename])
-        Game.training_binary = ELF.parse(newbinpath)
+        Game.binary = ELF.parse(newbinpath)
         
         verbose_print("Found a binary: " + binpath)
         info_print('Training binary files is: ' + newbinpath)
@@ -101,7 +101,7 @@ class Question:
         self._ask()
 
     def _get_answer(self, question): 
-        answer = input(colored('[?] ' + question + ' ', 'cyan'))
+        answer = input(colored('[?] ' + question + '\n : ', 'cyan'))
         return answer
 
     def _check_answer(self, answer, *args):
@@ -151,59 +151,68 @@ class DynamicQuestion(Question):
 
 
 
-# segment types variables
-segment_types = ELF.SEGMENT_TYPES.__members__
-segment_types_list = list(segment_types.values())
-def segment_types_str():
-    global segment_types
-    i = 0
-    ret = ''
-    stnl = list(segment_types) # segment types name list
-    for x in stnl:
-        ret += '\n\t' + str(i) + '. ' + stnl[i]
-        i += 1
-    return ret
-segment_types_str = segment_types_str()
 
 
-# section types variables
-section_types = ELF.SECTION_TYPES.__members__
-section_types_list = list(section_types.values())
-def section_types_str():
-    global section_types
-    i = 0
-    ret = ''
-    stnl = list(section_types) # section types name list
-    for x in stnl:
-        ret += '\n\t' + str(i) + '. ' + stnl[i]
-        i += 1
-    return ret
-section_types_str = section_types_str()
+class Info:
+    def __init__(self, type_members: dict):
+        self.types = type_members
+        self.typeslist = list(type_members.values())
+        self.strtypeslist = Info.list2str(list(type_members))
+        
+    def list2str(types: list) -> str:
+        i = 0
+        ret = ''
+        tnl = types # list
+        for x in tnl:
+            ret += '\n\t' + str(i) + '. ' + tnl[i]
+            i += 1
+        return ret
 
+
+SEG_INFO = Info(ELF.SEGMENT_TYPES.__members__) # segment types info
+SEC_INFO = Info(ELF.SECTION_TYPES.__members__) # section types info
+ELF_INFO = Info(ELF.E_TYPE.__members__) # elf types info
 
 # list of questions
 qs = []
+
+# number of sections
 qs.append(Question('How many sections the file have?', 
-                    lambda x: int(x) == Game.training_binary.header.numberof_sections))
+                    lambda x: int(x) == Game.binary.header.numberof_sections))
+# number of segments
 qs.append(Question('How many segments the file have?', 
-                    lambda x: int(x) == Game.training_binary.header.numberof_segments))
+                    lambda x: int(x) == Game.binary.header.numberof_segments))
+# entry point
+qs.append(Question('Which virtual address (in hex) OS starts executing after execution?', 
+                    lambda x: int(x, 16) == Game.binary.header.entrypoint))
+# ELF type
+qs.append(Question('What is the type of ELF file?' + ELF_INFO.strtypeslist, 
+                    lambda x: ELF_INFO.typeslist[int(x)] == Game.binary.header.file_type))
+# 32/64 bit
 qs.append(Question('What is the architecture of file 32bit or 64bit? (32/64) ', 
-                    lambda x: 
+                    lambda x:
                         int(x) == 32 and 
-                        Game.training_binary.header.identity_class == ELF.ELF_CLASS.CLASS32
+                        Game.binary.header.identity_class == ELF.ELF_CLASS.CLASS32
                         or
                         int(x) == 64 and
-                        Game.training_binary.header.identity_class == ELF.ELF_CLASS.CLASS64))
-
-qs.append(DynamicQuestion('What is the type of %&%th segment?' + segment_types_str + '\n :',
-                          lambda answer, p1: Game.training_binary.segments[p1].type == segment_types_list[int(answer)],
+                        Game.binary.header.identity_class == ELF.ELF_CLASS.CLASS64))
+# segment type
+qs.append(DynamicQuestion('What is the type of %&%th segment?' + SEG_INFO.strtypeslist,
+                          lambda x, p: Game.binary.segments[p].type == SEG_INFO.typeslist[int(x)],
                           None,
-                          lambda: random.randrange(0, Game.training_binary.header.numberof_segments)))
-
-qs.append(DynamicQuestion('What is the type of %&%th section?' + section_types_str + '\n :',
-                          lambda answer, p1: Game.training_binary.sections[p1].type == section_types_list[int(answer)],
+                          lambda: random.randrange(0, Game.binary.header.numberof_segments)))
+# section type
+qs.append(DynamicQuestion('What is the type of %&%th section?' + SEC_INFO.strtypeslist,
+                          lambda x, p: Game.binary.sections[p].type == SEC_INFO.typeslist[int(x)],
                           None,
-                          lambda: random.randrange(0, Game.training_binary.header.numberof_sections)))
+                          lambda: random.randrange(0, Game.binary.header.numberof_sections)))
+#
+'''qs.append(DynamicQuestion('Is there %&% section in %&% segment?',
+                          lambda x, p: Game.binary.sections[p].type == SEC_INFO.typeslist[int(x)],
+                          None,
+                          lambda: Game.binary.sections[random.randrange(1, Game.binary.header.numberof_sections)].name,
+                          lambda: random.randrange(0, Game.binary.header.numberof_segments)))'''
+
 
                           
 
